@@ -213,9 +213,12 @@ $('fClose').onclick = () => { $('finale').hidden = true; };
 $('fGallery').onclick = () => { $('finale').hidden = true; go('#/'); };
 $('done').onclick = () => $('back').onclick();
 $('fSave').onclick = () => {
-  board.exportCanvas(1800).toBlob((b) => {
-    if (!b) return; const url = URL.createObjectURL(b), a = document.createElement('a');
-    a.href = url; a.download = `calm-colors-${current.id}.png`; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  board.exportCanvas(1800).toBlob(async (b) => {
+    if (!b) return;
+    const name = `calm-colors-${current.id}.png`;
+    try { const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; if (dl) { await dl.save({ filename: name, data: b }); return; } } catch (e) { return; }   // hosted viewer: the host asks before saving
+    const url = URL.createObjectURL(b), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
   });
 };
 
@@ -351,14 +354,16 @@ function show(view) {
   $('gallery').hidden = view !== 'gallery'; $('studio').hidden = view !== 'studio';
   window.scrollTo(0, 0);
 }
-function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+let curHash = location.hash;                                  // kept in memory too, so routing still works where the address bar can't be changed
+function go(hash) { curHash = hash; try { if (location.hash !== hash) location.hash = hash; } catch (e) { /* ignore */ } route(); }
 const pendingTitles = {};
 function route() {
-  const h = location.hash; let mm;
+  const h = curHash; let mm;
   if ((mm = h.match(/^#\/draw\/([\w-]+)/))) {
     if (mm[1] === 'new') {
       const id = 'd' + Date.now().toString(36); pendingTitles[id] = `Drawing ${new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
-      location.replace(`#/draw/${id}`); return;
+      curHash = `#/draw/${id}`; try { history.replaceState(null, '', curHash); } catch (e) { /* ignore */ }
+      route(); return;
     }
     const a = freeArt(mm[1]); if (pendingTitles[mm[1]]) a.title = pendingTitles[mm[1]];
     open(a); return;
@@ -373,7 +378,7 @@ moreBtn.onclick = (e) => { e.stopPropagation(); more.classList.toggle('open'); m
 document.addEventListener('pointerdown', (e) => { if (isOpen() && !more.contains(e.target) && !moreBtn.contains(e.target)) closeMore(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
 $('back').onclick = async () => { clearTimeout(saveTimer); const free = current && current.free; if (current) await persist(); go(free ? '#/free' : '#/'); };
-addEventListener('hashchange', route);
+addEventListener('hashchange', () => { if (location.hash === curHash) return; curHash = location.hash; route(); });
 let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (current) { applyZoom(zoom, 0.5, 0.5, ...mid()); } }, 120); });
 document.fonts?.ready.then(() => { if (current) board.drawLabels(); });
 window.__calm = { board, ARTS };

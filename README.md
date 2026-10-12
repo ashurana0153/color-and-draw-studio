@@ -7,4 +7,4 @@ A paint-by-number coloring book for adults. Pick a fine-line picture, match the 
 - Paintings are saved on the device (IndexedDB)
 - Vanilla ES modules and canvas, no build step: serve the folder statically
 
-Live: https://ashurana0153.github.io/calm-colors/
+Live: https://ashurana0153.github.io/color-and-draw-studio/
