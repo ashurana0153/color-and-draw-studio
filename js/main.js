@@ -91,6 +91,7 @@ function buildPalette(art) {
 }
 function pick(n) {
   board.setColor(n); if (board.tool === 'erase') setTool('brush');
+  { const p = current && current.palette.find((q) => q.n === n); if (p) { $('curDot').style.background = p.hex; $('curName').textContent = `${p.n}  ${p.name}`; } }
   document.querySelectorAll('.sw').forEach((s) => { const on = +s.dataset.n === n; s.classList.toggle('on', on); s.setAttribute('aria-checked', on); if (on) s.scrollIntoView({ block: 'nearest', inline: 'nearest' }); });
 }
 function onProgress(st) {
@@ -152,7 +153,8 @@ $('fSave').onclick = () => {
 };
 
 // ---------------------------------------------------------------- tools
-function setTool(t) { board.tool = t; $('eraser').classList.toggle('on', t === 'erase'); $('eraser').setAttribute('aria-pressed', t === 'erase'); $('wrap').classList.toggle('erasing', t === 'erase'); }
+function setTool(t) { board.tool = t; $('brushBtn').classList.toggle('on', t !== 'erase'); $('brushBtn').setAttribute('aria-pressed', t !== 'erase'); $('eraser').classList.toggle('on', t === 'erase'); $('eraser').setAttribute('aria-pressed', t === 'erase'); $('wrap').classList.toggle('erasing', t === 'erase'); }
+$('brushBtn').onclick = () => setTool('brush');
 $('eraser').onclick = () => setTool(board.tool === 'erase' ? 'brush' : 'erase');
 $('undo').onclick = () => board.undo();
 $('guide').onclick = (e) => { board.guide = !board.guide; e.currentTarget.classList.toggle('on', board.guide); e.currentTarget.setAttribute('aria-pressed', board.guide); board.drawLabels(); };
@@ -160,10 +162,24 @@ $('inside').onclick = (e) => {
   board.inside = !board.inside; e.currentTarget.classList.toggle('on', board.inside); e.currentTarget.setAttribute('aria-pressed', board.inside);
   note(board.inside ? 'Stay in lines: strokes stop at the edge of the section you start in.' : 'Free hand: color can spill over the lines, just like paper.');
 };
-$('sizes').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return; board.size = +b.dataset.size;
-  $('sizes').querySelectorAll('button').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
-});
+// brush size: a slider on the left, like a drawing app
+const SZ = { min: 6, max: 48 };
+function setSize(v) {
+  v = Math.round(Math.max(SZ.min, Math.min(SZ.max, v))); board.size = v;
+  const t = (v - SZ.min) / (SZ.max - SZ.min), sl = $('size');
+  sl.style.setProperty('--t', t); sl.setAttribute('aria-valuenow', v);
+  $('sizeDot').style.setProperty('--d', `${6 + t * 22}px`);
+}
+(() => {
+  const sl = $('size'); let on = false;
+  const at = (e) => { const r = sl.getBoundingClientRect(), vert = r.height > r.width; setSize(SZ.min + (vert ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width) * (SZ.max - SZ.min)); };
+  sl.addEventListener('pointerdown', (e) => { on = true; sl.setPointerCapture(e.pointerId); at(e); });
+  sl.addEventListener('pointermove', (e) => { if (on) at(e); });
+  sl.addEventListener('pointerup', () => { on = false; }); sl.addEventListener('pointercancel', () => { on = false; });
+  sl.addEventListener('keydown', (e) => { const d = { ArrowUp: 3, ArrowRight: 3, ArrowDown: -3, ArrowLeft: -3 }[e.key]; if (d) { e.preventDefault(); setSize(board.size + d); } });
+})();
+setSize(24);
+
 let resetArmed = 0;
 $('reset').onclick = (e) => {
   const lab = e.currentTarget.querySelector('span');
@@ -246,7 +262,7 @@ addEventListener('keydown', (e) => {
   if (/^[0-9]$/.test(k)) { const n = k === '0' ? 10 : +k; if (current.palette.some((p) => p.n === n)) pick(n); }
   else if (k === 'e') setTool(board.tool === 'erase' ? 'brush' : 'erase');
   else if (k === 'b') setTool('brush');
-  else if (k === '[' || k === ']') { const btns = [...$('sizes').querySelectorAll('button')], i = btns.findIndex((b) => b.classList.contains('on')); btns[Math.max(0, Math.min(btns.length - 1, i + (k === ']' ? 1 : -1)))].click(); }
+  else if (k === '[' || k === ']') setSize(board.size + (k === ']' ? 6 : -6));
 });
 
 addEventListener('keyup', (e) => { if (e.key === ' ' && space) { space = false; syncPan(); } });

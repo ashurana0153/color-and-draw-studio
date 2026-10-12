@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body data-view="gallery">
 
@@ -29,36 +29,32 @@
   </div>
 </main>
 
-<main id="studio" class="view" hidden>
+<main id="studio" class="view" data-ws="dark" hidden>
   <header class="s-top">
-    <button id="back" class="pill" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Gallery</button>
+    <button id="back" class="link-btn" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Gallery</button>
     <div class="s-title"><span id="sCat" class="tag"></span><h2 id="sName"></h2></div>
     <div class="s-prog" aria-live="polite"><div class="bar"><i id="barFill"></i></div><b id="pct">0%</b></div>
-    <button id="soundBtn" class="icon" type="button" aria-label="Sound on" aria-pressed="true">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path class="waves" d="M16 8.5a5 5 0 010 7M18.5 6a8.5 8.5 0 010 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    </button>
+    <div class="actions">
+      <button id="undo" class="ibtn" type="button" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 7L4 12l5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h9a6 6 0 010 12" transform="translate(0 -5)" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+      <span class="sep"></span>
+      <button id="brushBtn" class="ibtn on" type="button" aria-label="Brush" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20 4l-9.500 9.500" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.500 12.500c-2.500 0-4 1.600-4 4 0 1.600-.8 2.800-2 3.500 3.500.8 7.500-.2 8-4 .3-1.800-.6-3.500-2-3.500z" fill="currentColor"/></svg></button>
+      <button id="eraser" class="ibtn" type="button" aria-label="Eraser" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 16l8-9 7 6-5 6H8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 19h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="extras" hidden>
+      <button id="guide" class="tool on" type="button" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>Guide</button>
+      <button id="pan" class="tool" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 12V6a1.5 1.5 0 013 0v5m0-1V4.500a1.500 1.500 0 013 0V11m0-3.500a1.500 1.500 0 013 0V15c0 4-2.500 6-6 6-2.700 0-4.200-1.200-5.500-3.300L4 14.500a1.500 1.500 0 012.500-1.500L8 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Move</button>
+      <button id="inside" class="tool" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>In lines</button>
+      <button id="reset" class="tool" type="button"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 12a8 8 0 108-8M4 4v5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Start over</span></button>
+      <button id="soundBtn" class="icon" type="button" aria-label="Sound on" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path class="waves" d="M16 8.5a5 5 0 010 7M18.5 6a8.5 8.5 0 010 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <div class="zoomctl" role="group" aria-label="Zoom"><button id="zOut" type="button" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button id="zFit" type="button" aria-label="Fit to screen">100%</button><button id="zIn" type="button" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+    </div>
   </header>
 
   <div class="s-main">
-    <nav class="rail" aria-label="Tools">
-      <div class="rail-group">
-        <span class="lbl">Brushes</span>
-        <div class="seg" id="sizes" role="radiogroup" aria-label="Brush size">
-            <button type="button" data-size="6" role="radio" aria-label="Fine brush"><svg viewBox="0 0 24 40" width="22" height="36" aria-hidden="true"><rect x="10.5" y="1" width="3" height="17" rx="1.5" fill="#b08a5e"/><rect x="9.5" y="18" width="5" height="6" rx="1" fill="#9aa09c"/><path d="M10.4 24H13.6Q13.6 33 12 38Q10.4 33 10.4 24Z" fill="currentColor"/></svg></button>
-            <button type="button" data-size="12" role="radio" aria-label="Small brush"><svg viewBox="0 0 24 40" width="22" height="36" aria-hidden="true"><rect x="10.5" y="1" width="3" height="17" rx="1.5" fill="#b08a5e"/><rect x="9.5" y="18" width="5" height="6" rx="1" fill="#9aa09c"/><path d="M9.4 24H14.6Q14.6 33 12 38Q9.4 33 9.4 24Z" fill="currentColor"/></svg></button>
-            <button type="button" data-size="24" role="radio" aria-label="Medium brush" class="on"><svg viewBox="0 0 24 40" width="22" height="36" aria-hidden="true"><rect x="10.5" y="1" width="3" height="17" rx="1.5" fill="#b08a5e"/><rect x="9.5" y="18" width="5" height="6" rx="1" fill="#9aa09c"/><path d="M8.2 24H15.8Q15.8 33 12 38Q8.2 33 8.2 24Z" fill="currentColor"/></svg></button>
-            <button type="button" data-size="44" role="radio" aria-label="Large brush"><svg viewBox="0 0 24 40" width="22" height="36" aria-hidden="true"><rect x="10.5" y="1" width="3" height="17" rx="1.5" fill="#b08a5e"/><rect x="9.5" y="18" width="5" height="6" rx="1" fill="#9aa09c"/><path d="M6.8 24H17.2Q17.2 33 12 38Q6.8 33 6.8 24Z" fill="currentColor"/></svg></button>
-          </div>
-      </div>
-      <div class="rail-group tool-grid">
-      <button id="eraser" class="tool" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 16l8-9 7 6-5 6H8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 19h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Eraser</button>
-      <button id="undo" class="tool" type="button" disabled><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 7L4 12l5 5M4 12h10a6 6 0 010 12" transform="translate(0 -4)" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Undo</button>
-      <button id="guide" class="tool on" type="button" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>Guide</button>
-      <button id="pan" class="tool" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M8 12V6a1.5 1.5 0 013 0v5m0-1V4.500a1.500 1.500 0 013 0V11m0-3.500a1.500 1.500 0 013 0V15c0 4-2.500 6-6 6-2.700 0-4.200-1.200-5.500-3.300L4 14.500a1.500 1.500 0 012.500-1.500L8 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Move</button>
-      <button id="inside" class="tool" type="button" aria-pressed="false" title="Optional: strokes stop at the edge of the section you start in"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>In lines</button>
-      <button id="reset" class="tool" type="button"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 12a8 8 0 108-8M4 4v5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Start over</span></button>
-      </div>
-    </nav>
+    <aside class="side" aria-label="Brush size">
+      <i id="sizeDot" class="size-dot"></i>
+      <div id="size" class="slider" role="slider" tabindex="0" aria-label="Brush size" aria-valuemin="6" aria-valuemax="48" aria-valuenow="24"><span class="track"></span><span class="fill"></span><span class="thumb"></span></div>
+    </aside>
 
     <div class="stage" id="stage">
       <div class="paper-wrap" id="wrap">
@@ -73,16 +69,12 @@
         <div id="cursor" class="cursor" hidden></div>
         <div id="note" class="note" role="status" aria-live="polite" hidden></div>
       </div>
-      <div class="zoomctl" role="group" aria-label="Zoom">
-        <button id="zOut" type="button" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-        <button id="zFit" type="button" aria-label="Fit to screen">100%</button>
-        <button id="zIn" type="button" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-      </div>
     </div>
 
-    <section class="dock" aria-label="Paint pots">
-      <div id="palette" class="palette" role="radiogroup" aria-label="Paint pots"></div>
-    </section>
+    <aside class="colors" aria-label="Colors">
+      <div class="cur"><i id="curDot"></i><span id="curName"></span></div>
+      <div id="palette" class="palette" role="radiogroup" aria-label="Color palette"></div>
+    </aside>
   </div>
 </main>
 
@@ -101,6 +93,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=6"></script>
+<script type="module" src="js/main.js?v=7"></script>
 </body>
 </html>
