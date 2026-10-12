@@ -12,6 +12,11 @@ const store = {
 };
 let meta = {}; try { meta = JSON.parse(store.get('meta') || '{}'); } catch (e) { meta = {}; }
 const saveMeta = () => store.set('meta', JSON.stringify(meta));
+let drawings = []; try { drawings = JSON.parse(store.get('drawings') || '[]'); } catch (e) { drawings = []; }
+const saveDrawings = () => store.set('drawings', JSON.stringify(drawings));
+const FREE_COLORS = [['Ink', '#1c1c1e'], ['Red', '#ff3b30'], ['Orange', '#ff9500'], ['Yellow', '#ffcc00'], ['Green', '#34c759'], ['Teal', '#30b0c7'], ['Blue', '#0a84ff'], ['Purple', '#af52de'], ['Pink', '#ff6482'], ['Brown', '#a2845e'], ['Grey', '#8e8e93'], ['White', '#ffffff']];
+let customHex = '#7c5cff';
+const freeArt = (id) => ({ id, free: true, cat: 'free', title: (drawings.find((d) => d.id === id) || {}).title || 'Drawing', items: [], palette: [...FREE_COLORS.map(([name, hex], i) => ({ n: i + 1, name, hex })), { n: 99, name: 'Custom', hex: customHex }] });
 const sound = new Sound(); sound.on = store.get('sound') !== 'off';
 const byId = (id) => ARTS.find((a) => a.id === id);
 const regionCount = (a) => a.items.filter((i) => !i.line).length;
@@ -31,17 +36,35 @@ async function thumb(canvas, art) {
     if (!url) { res(); return; }
     const img = new Image(); img.onload = () => { g.drawImage(img, 0, 0, size, size); res(); }; img.onerror = () => res(); img.src = url;
   }));
+  if (art.free) return;
   const l = document.createElement('canvas'); l.width = l.height = size; strokeItems(l.getContext('2d'), art.items, s, 1); g.drawImage(l, 0, 0);
 }
 
+let tab = 'color', editing = false;
+function setTab(t) {
+  tab = t; editing = false;
+  document.querySelector('.seg2').dataset.tab = t;
+  $('tabColor').setAttribute('aria-selected', t === 'color'); $('tabFree').setAttribute('aria-selected', t === 'free');
+  $('cats').hidden = t !== 'color'; $('free').hidden = t !== 'free';
+  $('editBtn').hidden = t !== 'free' || !drawings.length; $('editBtn').textContent = 'Select';
+  $('free').classList.remove('editing');
+  buildStat();
+}
+function buildStat() {
+  if (tab === 'free') { $('heroStat').innerHTML = drawings.length ? `<b>${drawings.length}</b> ${drawings.length === 1 ? 'drawing' : 'drawings'} on this device` : 'A blank page, a pen and your imagination.'; return; }
+  const done = ARTS.filter((a) => meta[a.id]?.done).length, total = ARTS.length;
+  $('heroStat').innerHTML = done === total ? `<b>All ${total}</b> pictures colored` : `<b>${done}</b> of ${total} pictures colored`;
+}
+$('tabColor').onclick = () => go('#/'); $('tabFree').onclick = () => go('#/free');
+$('editBtn').onclick = () => { editing = !editing; $('free').classList.toggle('editing', editing); $('editBtn').textContent = editing ? 'Done' : 'Select'; $('free').querySelectorAll('.del').forEach((d) => { d.textContent = '\u2212'; d.dataset.armed = ''; }); };
+
 function buildGallery() {
   const host = $('cats'); host.innerHTML = '';
-  let done = 0;
   for (const cat of CATEGORIES) {
     const arts = ARTS.filter((a) => a.cat === cat.id); if (!arts.length) continue;
-    const finished = arts.filter((a) => meta[a.id]?.done).length; done += finished;
+    const finished = arts.filter((a) => meta[a.id]?.done).length;
     const sec = el('section', `cat cat-${cat.id}`);
-    sec.innerHTML = `<div class="cat-head"><span class="cat-ico">${ICONS[cat.id] || ''}</span><div><h2>${cat.title}</h2><p>${cat.blurb}</p></div><span class="cat-count">${finished} of ${arts.length} colored</span></div>`;
+    sec.innerHTML = `<div class="cat-head"><h2>${cat.title}</h2><p>${cat.blurb}</p><span class="cat-count">${finished} of ${arts.length} colored</span></div>`;
     const grid = el('div', 'grid');
     arts.forEach((a, idx) => {
       const m = meta[a.id] || {}, pct = Math.round((m.pct || 0) * 100);
@@ -55,8 +78,36 @@ function buildGallery() {
     });
     sec.append(grid); host.append(sec);
   }
-  const total = ARTS.length;
-  $('heroStat').innerHTML = done === total ? `<b>All ${total}</b> pictures colored` : `<b>${done}</b> of ${total} pictures colored`;
+  buildFree();
+  setTab(tab);
+}
+
+function buildFree() {
+  const host = $('free'); host.innerHTML = '';
+  const grid = el('div', 'grid');
+  const nb = el('button', 'card new'); nb.type = 'button';
+  nb.innerHTML = '<span class="tile"><span class="plus"><svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></span><span class="card-title">New Drawing</span><span class="card-meta">Blank page</span>';
+  nb.onclick = () => go('#/draw/new');
+  grid.append(nb);
+  [...drawings].sort((a, b) => b.t - a.t).forEach((d, idx) => {
+    const b = el('div', 'card'); b.style.setProperty('--i', idx + 1); b.tabIndex = 0; b.setAttribute('role', 'button');
+    const c = el('canvas'); thumb(c, { id: d.id, free: true, items: [] });
+    const del = el('button', 'del', '\u2212'); del.type = 'button'; del.setAttribute('aria-label', `Delete ${d.title}`);
+    del.onclick = async (e) => {
+      e.stopPropagation();
+      if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Delete'; return; }
+      await paint.del(d.id); drawings = drawings.filter((x) => x.id !== d.id); saveDrawings();
+      b.style.transition = 'opacity .2s, transform .2s'; b.style.opacity = '0'; b.style.transform = 'scale(.9)';
+      setTimeout(() => { buildFree(); $('free').classList.toggle('editing', editing && drawings.length > 0); if (!drawings.length) { editing = false; $('editBtn').hidden = true; } buildStat(); }, 200);
+    };
+    b.append(c, del);
+    b.insertAdjacentHTML('beforeend', `<span class="card-title">${d.title}</span><span class="card-meta">${new Date(d.t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>`);
+    b.addEventListener('click', () => { if (!editing) go(`#/draw/${d.id}`); });
+    b.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !editing) go(`#/draw/${d.id}`); });
+    grid.append(b);
+  });
+  host.append(grid);
+  if (!drawings.length) host.append(el('p', 'empty', 'Your drawings are saved here automatically.'));
 }
 
 // ---------------------------------------------------------------- studio
@@ -85,7 +136,13 @@ function buildPalette(art) {
     const b = el('button', 'sw'); b.type = 'button'; b.dataset.n = p.n; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', `Color ${p.n}, ${p.name}`);
     const lum = (parseInt(p.hex.slice(1, 3), 16) * 0.299 + parseInt(p.hex.slice(3, 5), 16) * 0.587 + parseInt(p.hex.slice(5, 7), 16) * 0.114);
     b.innerHTML = `<span class="dot" style="--c:${p.hex};--t:${lum > 170 ? '#26302b' : '#fff'}"><b>${p.n}</b><svg class="ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7.500" fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nm">${p.name}</span><span class="left"></span>`;
-    b.addEventListener('click', () => pick(p.n));
+    if (art.free && p.n === 99) {
+      b.classList.add('wheel'); b.setAttribute('aria-label', 'Custom color');
+      b.innerHTML = `<span class="dot wheelring"><i style="background:${p.hex}"></i></span><input type="color" value="${p.hex}" tabindex="-1" aria-hidden="true">`;
+      const inp = b.querySelector('input');
+      inp.addEventListener('input', () => { p.hex = customHex = inp.value; board.colors[99] = p.hex; b.querySelector('i').style.background = p.hex; $('toolbar').style.setProperty('--c', p.hex); });
+      b.addEventListener('click', (e) => { if (e.target !== inp) { pick(99); inp.click(); } });
+    } else b.addEventListener('click', () => pick(p.n));
     host.append(b);
   }
 }
@@ -108,8 +165,9 @@ function onProgress(st) {
 
 async function open(art) {
   current = art;
-  $('sName').textContent = art.title; $('sCat').textContent = CATEGORIES.find((c) => c.id === art.cat).title;
-  document.body.dataset.cat = art.cat;
+  $('sName').textContent = art.title; $('sCat').textContent = art.free ? '' : CATEGORIES.find((c) => c.id === art.cat).title;
+  document.body.dataset.cat = art.cat; $('studio').dataset.mode = art.free ? 'free' : 'color';
+  applyToolset(art.free ? 'free' : 'color', 1);
   show('studio');
   buildPalette(art);
   await new Promise((r) => requestAnimationFrame(r));
@@ -122,7 +180,15 @@ async function open(art) {
 }
 
 async function persist() {
-  if (!current) return; const art = current, st = board.stats();
+  if (!current) return; const art = current;
+  if (art.free) {
+    if (board.hasPaint()) {
+      const b = await board.toBlob(); if (b && !(await paint.set(art.id, b))) note('Could not save on this device.');
+      const d = drawings.find((x) => x.id === art.id); if (d) d.t = Date.now(); else drawings.push({ id: art.id, title: art.title, t: Date.now() }); saveDrawings();
+    } else { await paint.del(art.id); drawings = drawings.filter((x) => x.id !== art.id); saveDrawings(); }
+    return;
+  }
+  const st = board.stats();
   if (board.hasPaint()) { const b = await board.toBlob(); if (b && !(await paint.set(art.id, b))) note('Could not save on this device.'); } else await paint.del(art.id);
   meta[art.id] = { pct: st.pct, done: st.allDone }; saveMeta();
 }
@@ -160,11 +226,16 @@ function syncTools() {
   $('eraser').classList.toggle('on', erase); $('eraser').setAttribute('aria-pressed', erase); $('eraser').setAttribute('aria-checked', erase);
   $('wrap').classList.toggle('erasing', erase);
 }
+const TOOLSETS = { color: [[8, 1, 'Fine brush'], [20, 1, 'Medium brush'], [44, 1, 'Broad brush']], free: [[4, 1, 'Pen'], [14, 1, 'Brush'], [30, 0.4, 'Marker']] };
+function applyToolset(mode, pickIdx) {
+  $('sizes').querySelectorAll('.tool-i[data-size]').forEach((b, i) => { const [s, a, l] = TOOLSETS[mode][i]; b.dataset.size = s; b.dataset.alpha = a; b.setAttribute('aria-label', l); });
+  const d = TOOLSETS[mode][pickIdx]; board.size = d[0]; board.alpha = d[1]; board.tool = 'brush'; syncTools();
+}
 function setTool(t) { board.tool = t; syncTools(); }
 function setSize(v) { board.size = v; syncTools(); }
 $('sizes').addEventListener('click', (e) => {
   const b = e.target.closest('.tool-i'); if (!b) return;
-  if (b.id === 'eraser') setTool('erase'); else { board.size = +b.dataset.size; setTool('brush'); }
+  if (b.id === 'eraser') { if (current && current.free) board.size = 28; setTool('erase'); } else { board.size = +b.dataset.size; board.alpha = +b.dataset.alpha || 1; setTool('brush'); }
 });
 $('undo').onclick = () => board.undo();
 $('redo').onclick = () => board.redo();
@@ -269,7 +340,7 @@ addEventListener('keydown', (e) => {
   if (/^[0-9]$/.test(k)) { const n = k === '0' ? 10 : +k; if (current.palette.some((p) => p.n === n)) pick(n); }
   else if (k === 'e') setTool(board.tool === 'erase' ? 'brush' : 'erase');
   else if (k === 'b') setTool('brush');
-  else if (k === '[' || k === ']') { const S3 = [8, 20, 44], i = S3.indexOf(board.size); setSize(S3[Math.max(0, Math.min(2, (i < 0 ? 1 : i) + (k === ']' ? 1 : -1)))]); setTool('brush'); }
+  else if (k === '[' || k === ']') { const bs = [...$('sizes').querySelectorAll('.tool-i[data-size]')], i = bs.findIndex((b) => +b.dataset.size === board.size), nb = bs[Math.max(0, Math.min(2, (i < 0 ? 1 : i) + (k === ']' ? 1 : -1)))]; board.size = +nb.dataset.size; board.alpha = +nb.dataset.alpha || 1; setTool('brush'); }
 });
 
 addEventListener('keyup', (e) => { if (e.key === ' ' && space) { space = false; syncPan(); } });
@@ -281,9 +352,19 @@ function show(view) {
   window.scrollTo(0, 0);
 }
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+const pendingTitles = {};
 function route() {
-  const m = location.hash.match(/^#\/art\/([\w-]+)/), art = m && byId(m[1]);
-  if (art) open(art); else { current = null; buildGallery(); show('gallery'); $('finale').hidden = true; }
+  const h = location.hash; let mm;
+  if ((mm = h.match(/^#\/draw\/([\w-]+)/))) {
+    if (mm[1] === 'new') {
+      const id = 'd' + Date.now().toString(36); pendingTitles[id] = `Drawing ${new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
+      location.replace(`#/draw/${id}`); return;
+    }
+    const a = freeArt(mm[1]); if (pendingTitles[mm[1]]) a.title = pendingTitles[mm[1]];
+    open(a); return;
+  }
+  const art = (mm = h.match(/^#\/art\/([\w-]+)/)) && byId(mm[1]);
+  if (art) open(art); else { current = null; tab = h.startsWith('#/free') ? 'free' : 'color'; buildGallery(); show('gallery'); $('finale').hidden = true; }
 }
 const more = $('more'), moreBtn = $('moreBtn');
 const isOpen = () => more.classList.contains('open');
@@ -291,7 +372,7 @@ const closeMore = () => { more.classList.remove('open'); moreBtn.setAttribute('a
 moreBtn.onclick = (e) => { e.stopPropagation(); more.classList.toggle('open'); moreBtn.setAttribute('aria-expanded', String(isOpen())); };
 document.addEventListener('pointerdown', (e) => { if (isOpen() && !more.contains(e.target) && !moreBtn.contains(e.target)) closeMore(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
-$('back').onclick = async () => { clearTimeout(saveTimer); if (current) await persist(); go('#/'); };
+$('back').onclick = async () => { clearTimeout(saveTimer); const free = current && current.free; if (current) await persist(); go(free ? '#/free' : '#/'); };
 addEventListener('hashchange', route);
 let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (current) { applyZoom(zoom, 0.5, 0.5, ...mid()); } }, 120); });
 document.fonts?.ready.then(() => { if (current) board.drawLabels(); });

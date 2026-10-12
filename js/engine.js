@@ -19,7 +19,7 @@ export class Board {
     this.scratch = mk(S); this.sctx = this.scratch.getContext('2d', { willReadFrequently: true });
     this.hitCtx = mk(1).getContext('2d');
     this.hl = mk(S); this.hlctx = this.hl.getContext('2d');           // soft highlight of the sections that match the chosen colour
-    this.color = 1; this.size = 24; this.tool = 'brush'; this.inside = false; this.guide = true;
+    this.color = 1; this.size = 24; this.alpha = 1; this.tool = 'brush'; this.inside = false; this.guide = true;
     this.maskCache = new Map(); this.hist = []; this.redoStack = []; this.stroke = null; this.pulse = 0; this.flashes = []; this.regions = []; this.wasAll = false;
   }
 
@@ -31,7 +31,7 @@ export class Board {
     this.regions = [];
     art.items.forEach((it) => { if (!it.line) this.regions.push({ n: it.n, path: pathOf(it), eo: !!it.eo, done: false, order: this.regions.length }); });
     this.analyse();
-    this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, P, P);
+    this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, P, P); this.painted = !!saved;
     if (saved) { try { await this.restore(saved); } catch (e) { /* ignore a broken save */ } }
     const open = this.regions.find((r) => !r.done && !r.hidden);
     this.color = open ? open.n : art.palette[0].n;
@@ -192,6 +192,7 @@ export class Board {
       if (!r0) { this.stroke = null; return; }
       s.region = r0; s.mask = this.getMask(r0);
     }
+    if (this.alpha < 1 && this.tool === 'brush') s.layer = mk(P);          // translucent marker: the stroke is built opaque, then laid on at the marker's opacity
     this.stroke = s;
     if (this.tool === 'brush' && r0 && r0.n !== this.color) this.hooks.mismatch?.(r0);
     this.seg(x, y, x, y, pressure);
@@ -231,9 +232,15 @@ export class Board {
     t.beginPath(); t.moveTo(x0, y0); t.lineTo(x1 + 0.01, y1 + 0.01); t.stroke(); t.restore();
     if (s.mask) { t.globalCompositeOperation = 'destination-in'; t.drawImage(s.mask, bx, by, bw, bh, bx, by, bw, bh); t.globalCompositeOperation = 'source-over'; }
     const p = this.pctx; p.setTransform(1, 0, 0, 1, 0, 0);
-    p.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
-    p.drawImage(this.tmp, bx, by, bw, bh, bx, by, bw, bh);
-    p.globalCompositeOperation = 'source-over';
+    if (s.layer && !erase) {
+      s.layer.getContext('2d').drawImage(this.tmp, bx, by, bw, bh, bx, by, bw, bh);
+      p.globalCompositeOperation = 'source-over'; p.clearRect(bx, by, bw, bh); p.drawImage(s.before, bx, by, bw, bh, bx, by, bw, bh);
+      p.globalAlpha = this.alpha; p.drawImage(s.layer, bx, by, bw, bh, bx, by, bw, bh); p.globalAlpha = 1;
+    } else {
+      p.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+      p.drawImage(this.tmp, bx, by, bw, bh, bx, by, bw, bh);
+      p.globalCompositeOperation = 'source-over';
+    }
     // bookkeeping along the segment: what colour each sample point now carries
     const dist = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.ceil(dist / (r * 0.6)));
     for (let i = 0; i <= n; i++) this.stamp(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n, r * 0.94, erase);
@@ -277,6 +284,7 @@ export class Board {
     const d = s.dirty; if (!d) return;
     const w = d.x1 - d.x0, h = d.y1 - d.y0, c = mk(w, h);
     c.getContext('2d').drawImage(s.before, d.x0, d.y0, w, h, 0, 0, w, h);
+    this.painted = true;
     this.hist.push({ x: d.x0, y: d.y0, c, cols: s.colBefore, done: s.doneBefore });
     if (this.hist.length > 14) this.hist.shift();
     this.redoStack = [];
@@ -310,7 +318,7 @@ export class Board {
     this.hooks.history?.(this.hist.length, this.redoStack.length); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
   }
   reset() {
-    this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, P, P); this.hist = []; this.redoStack = []; this.wasAll = false;
+    this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, P, P); this.hist = []; this.redoStack = []; this.wasAll = false; this.painted = false;
     for (const r of this.regions) { if (r.hidden) continue; r.col.fill(0); r.count = 0; r.done = false; }
     this.buildHighlight(); this.drawLabels(); this.hooks.history?.(0, 0); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
   }
@@ -326,7 +334,7 @@ export class Board {
     return { pct: den ? num / den : 0, per, allDone: left === 0 && den > 0 };
   }
   emit() { this.hooks.progress?.(this.stats()); this.hooks.history?.(this.hist.length, this.redoStack.length); }
-  hasPaint() { return this.regions.some((r) => !r.hidden && r.col.some((v) => v)); }
+  hasPaint() { if (this.art && this.art.free) return !!this.painted; return this.regions.some((r) => !r.hidden && r.col.some((v) => v)); }
   toBlob() { return new Promise((res) => this.els.paint.toBlob(res, 'image/png')); }
   exportCanvas(size = 1800) {
     const c = mk(size), g = c.getContext('2d');
