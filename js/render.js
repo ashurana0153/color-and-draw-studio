@@ -1,10 +1,12 @@
 export const W = 800;
-export const INK = '#2f2b35';
-export const PAPER = '#fffdf8';
+export const INK = '#80847f';
+export const PAPER = '#fffefb';
+export const OUTLINE = 1.05;     // fine-line weight of a section's edge, in art units (the picture is 800 x 800)
+export const DETAIL = 0.85;     // default weight of a detail line
 
 export function pathOf(it) { return it.path || (it.path = new Path2D(it.d)); }
 
-// Draws the pencil outline. Lines that sit under a later (higher) section are hidden, so layered shapes read cleanly.
+// Draws the ink outline. Lines that sit under a later (higher) section are hidden, so layered shapes read cleanly.
 export function strokeItems(ctx, items, scale, minWidth = 1) {
   ctx.save();
   ctx.scale(scale, scale);
@@ -12,11 +14,11 @@ export function strokeItems(ctx, items, scale, minWidth = 1) {
   const floor = minWidth / scale;
   for (const it of items) {
     const p = pathOf(it);
-    if (it.line) { ctx.lineWidth = Math.max(it.w || 1.6, floor); ctx.stroke(p); continue; }
+    if (it.line) { ctx.lineWidth = Math.max(Math.min(it.w || DETAIL, 1.1), floor); ctx.stroke(p); continue; }
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fill(p, it.eo ? 'evenodd' : 'nonzero');
     ctx.globalCompositeOperation = 'source-over';
-    ctx.lineWidth = Math.max(2.4, floor);
+    ctx.lineWidth = Math.max(Math.min(it.ow || OUTLINE, 1.4), floor);
     ctx.stroke(p);
   }
   ctx.restore();
