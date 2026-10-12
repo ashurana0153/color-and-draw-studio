@@ -66,7 +66,7 @@ const board = new Board(els, {
   progress: onProgress,
   regionDone: () => sound.pop(),
   changed: () => scheduleSave(),
-  history: (n) => { $('undo').disabled = n === 0; },
+  history: (n, r = 0) => { $('undo').disabled = n === 0; $('redo').disabled = r === 0; },
   mismatch: (r) => {
     const now = performance.now(); if (now - lastMismatch < 14000) return; lastMismatch = now;
     const c = current && current.palette.find((p) => p.n === r.n); note(`That section is ${r.n}${c ? `, ${c.name}` : ''}. Pick ${r.n} to match the number.`);
@@ -91,7 +91,7 @@ function buildPalette(art) {
 }
 function pick(n) {
   board.setColor(n); if (board.tool === 'erase') setTool('brush');
-  { const p = current && current.palette.find((q) => q.n === n); if (p) { $('curDot').style.background = p.hex; $('curName').textContent = `${p.n}  ${p.name}`; } }
+  { const p = current && current.palette.find((q) => q.n === n); if (p) $('toolbar').style.setProperty('--c', p.hex); }
   document.querySelectorAll('.sw').forEach((s) => { const on = +s.dataset.n === n; s.classList.toggle('on', on); s.setAttribute('aria-checked', on); if (on) s.scrollIntoView({ block: 'nearest', inline: 'nearest' }); });
 }
 function onProgress(st) {
@@ -145,6 +145,7 @@ function finale() {
 }
 $('fClose').onclick = () => { $('finale').hidden = true; };
 $('fGallery').onclick = () => { $('finale').hidden = true; go('#/'); };
+$('done').onclick = () => $('back').onclick();
 $('fSave').onclick = () => {
   board.exportCanvas(1800).toBlob((b) => {
     if (!b) return; const url = URL.createObjectURL(b), a = document.createElement('a');
@@ -153,32 +154,26 @@ $('fSave').onclick = () => {
 };
 
 // ---------------------------------------------------------------- tools
-function setTool(t) { board.tool = t; $('brushBtn').classList.toggle('on', t !== 'erase'); $('brushBtn').setAttribute('aria-pressed', t !== 'erase'); $('eraser').classList.toggle('on', t === 'erase'); $('eraser').setAttribute('aria-pressed', t === 'erase'); $('wrap').classList.toggle('erasing', t === 'erase'); }
-$('brushBtn').onclick = () => setTool('brush');
-$('eraser').onclick = () => setTool(board.tool === 'erase' ? 'brush' : 'erase');
+function syncTools() {
+  const erase = board.tool === 'erase';
+  $('sizes').querySelectorAll('.tool-i[data-size]').forEach((b) => { const on = !erase && +b.dataset.size === board.size; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('eraser').classList.toggle('on', erase); $('eraser').setAttribute('aria-pressed', erase); $('eraser').setAttribute('aria-checked', erase);
+  $('wrap').classList.toggle('erasing', erase);
+}
+function setTool(t) { board.tool = t; syncTools(); }
+function setSize(v) { board.size = v; syncTools(); }
+$('sizes').addEventListener('click', (e) => {
+  const b = e.target.closest('.tool-i'); if (!b) return;
+  if (b.id === 'eraser') setTool('erase'); else { board.size = +b.dataset.size; setTool('brush'); }
+});
 $('undo').onclick = () => board.undo();
+$('redo').onclick = () => board.redo();
 $('guide').onclick = (e) => { board.guide = !board.guide; e.currentTarget.classList.toggle('on', board.guide); e.currentTarget.setAttribute('aria-pressed', board.guide); board.drawLabels(); };
 $('inside').onclick = (e) => {
   board.inside = !board.inside; e.currentTarget.classList.toggle('on', board.inside); e.currentTarget.setAttribute('aria-pressed', board.inside);
   note(board.inside ? 'Stay in lines: strokes stop at the edge of the section you start in.' : 'Free hand: color can spill over the lines, just like paper.');
 };
-// brush size: a slider on the left, like a drawing app
-const SZ = { min: 6, max: 48 };
-function setSize(v) {
-  v = Math.round(Math.max(SZ.min, Math.min(SZ.max, v))); board.size = v;
-  const t = (v - SZ.min) / (SZ.max - SZ.min), sl = $('size');
-  sl.style.setProperty('--t', t); sl.setAttribute('aria-valuenow', v);
-  $('sizeDot').style.setProperty('--d', `${6 + t * 22}px`);
-}
-(() => {
-  const sl = $('size'); let on = false;
-  const at = (e) => { const r = sl.getBoundingClientRect(), vert = r.height > r.width; setSize(SZ.min + (vert ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width) * (SZ.max - SZ.min)); };
-  sl.addEventListener('pointerdown', (e) => { on = true; sl.setPointerCapture(e.pointerId); at(e); });
-  sl.addEventListener('pointermove', (e) => { if (on) at(e); });
-  sl.addEventListener('pointerup', () => { on = false; }); sl.addEventListener('pointercancel', () => { on = false; });
-  sl.addEventListener('keydown', (e) => { const d = { ArrowUp: 3, ArrowRight: 3, ArrowDown: -3, ArrowLeft: -3 }[e.key]; if (d) { e.preventDefault(); setSize(board.size + d); } });
-})();
-setSize(24);
+setSize(20);
 
 let resetArmed = 0;
 $('reset').onclick = (e) => {
@@ -255,14 +250,15 @@ viewport.addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('keydown', (e) => {
   if (document.body.dataset.view !== 'studio' || !$('finale').hidden || e.target.closest('input,textarea')) return;
   const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); board.undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? board.redo() : board.undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); board.redo(); return; }
   if (e.key === ' ') { e.preventDefault(); if (!space) { space = true; syncPan(); } return; }
   if (e.key === '+' || e.key === '=') { zoomAt(1.4, ...mid()); return; }
   if (e.key === '-' || e.key === '_') { zoomAt(1 / 1.4, ...mid()); return; }
   if (/^[0-9]$/.test(k)) { const n = k === '0' ? 10 : +k; if (current.palette.some((p) => p.n === n)) pick(n); }
   else if (k === 'e') setTool(board.tool === 'erase' ? 'brush' : 'erase');
   else if (k === 'b') setTool('brush');
-  else if (k === '[' || k === ']') setSize(board.size + (k === ']' ? 6 : -6));
+  else if (k === '[' || k === ']') { const S3 = [8, 20, 44], i = S3.indexOf(board.size); setSize(S3[Math.max(0, Math.min(2, (i < 0 ? 1 : i) + (k === ']' ? 1 : -1)))]); setTool('brush'); }
 });
 
 addEventListener('keyup', (e) => { if (e.key === ' ' && space) { space = false; syncPan(); } });
@@ -278,6 +274,11 @@ function route() {
   const m = location.hash.match(/^#\/art\/([\w-]+)/), art = m && byId(m[1]);
   if (art) open(art); else { current = null; buildGallery(); show('gallery'); $('finale').hidden = true; }
 }
+const more = $('more'), moreBtn = $('moreBtn');
+const closeMore = () => { more.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); };
+moreBtn.onclick = (e) => { e.stopPropagation(); more.hidden = !more.hidden; moreBtn.setAttribute('aria-expanded', String(!more.hidden)); };
+document.addEventListener('pointerdown', (e) => { if (!more.hidden && !more.contains(e.target) && !moreBtn.contains(e.target)) closeMore(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
 $('back').onclick = async () => { clearTimeout(saveTimer); if (current) await persist(); go('#/'); };
 addEventListener('hashchange', route);
 let rz = 0; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (current) { applyZoom(zoom, 0.5, 0.5, ...mid()); } }, 120); });

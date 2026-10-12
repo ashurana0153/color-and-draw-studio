@@ -20,12 +20,12 @@ export class Board {
     this.hitCtx = mk(1).getContext('2d');
     this.hl = mk(S); this.hlctx = this.hl.getContext('2d');           // soft highlight of the sections that match the chosen colour
     this.color = 1; this.size = 24; this.tool = 'brush'; this.inside = false; this.guide = true;
-    this.maskCache = new Map(); this.hist = []; this.stroke = null; this.pulse = 0; this.flashes = []; this.regions = []; this.wasAll = false;
+    this.maskCache = new Map(); this.hist = []; this.redoStack = []; this.stroke = null; this.pulse = 0; this.flashes = []; this.regions = []; this.wasAll = false;
   }
 
   // ---------- loading ----------
   async load(art, saved) {
-    this.art = art; this.maskCache.clear(); this.hist = []; this.flashes = []; this.stroke = null;
+    this.art = art; this.maskCache.clear(); this.hist = []; this.redoStack = []; this.flashes = []; this.stroke = null;
     this.colors = {}; this.rgb = {};
     art.palette.forEach((p) => { this.colors[p.n] = p.hex; this.rgb[p.n] = rgbOf(p.hex); });
     this.regions = [];
@@ -279,25 +279,40 @@ export class Board {
     c.getContext('2d').drawImage(s.before, d.x0, d.y0, w, h, 0, 0, w, h);
     this.hist.push({ x: d.x0, y: d.y0, c, cols: s.colBefore, done: s.doneBefore });
     if (this.hist.length > 14) this.hist.shift();
+    this.redoStack = [];
     s.before = null;
-    this.hooks.history?.(this.hist.length);
+    this.hooks.history?.(this.hist.length, 0);
   }
-  undo() {
-    const h = this.hist.pop(); if (!h) return;
-    const p = this.pctx; p.setTransform(1, 0, 0, 1, 0, 0); p.globalCompositeOperation = 'source-over';
-    p.clearRect(h.x, h.y, h.c.width, h.c.height); p.drawImage(h.c, h.x, h.y);
+  // swap a history patch into the picture and return the patch that would undo that swap
+  applyPatch(h) {
+    const p = this.pctx, w = h.c.width, ht = h.c.height, now = mk(w, ht);
+    now.getContext('2d').drawImage(this.els.paint, h.x, h.y, w, ht, 0, 0, w, ht);
+    const cols = new Map(), done = new Map();
+    for (const reg of h.cols.keys()) { cols.set(reg, reg.col.slice()); done.set(reg, reg.done); }
+    p.setTransform(1, 0, 0, 1, 0, 0); p.globalCompositeOperation = 'source-over';
+    p.clearRect(h.x, h.y, w, ht); p.drawImage(h.c, h.x, h.y);
     for (const [reg, col] of h.cols) {
       reg.col = col; let c = 0; for (let k = 0; k < col.length; k++) if (col[k] === reg.n) c++;
       reg.count = c; reg.done = h.done.get(reg);
     }
     this.wasAll = this.stats().allDone;
     this.buildHighlight(); this.drawLabels();
-    this.hooks.history?.(this.hist.length); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
+    return { x: h.x, y: h.y, c: now, cols, done };
+  }
+  undo() {
+    const h = this.hist.pop(); if (!h) return;
+    this.redoStack.push(this.applyPatch(h));
+    this.hooks.history?.(this.hist.length, this.redoStack.length); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
+  }
+  redo() {
+    const h = this.redoStack.pop(); if (!h) return;
+    this.hist.push(this.applyPatch(h));
+    this.hooks.history?.(this.hist.length, this.redoStack.length); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
   }
   reset() {
-    this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, P, P); this.hist = []; this.wasAll = false;
+    this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, P, P); this.hist = []; this.redoStack = []; this.wasAll = false;
     for (const r of this.regions) { if (r.hidden) continue; r.col.fill(0); r.count = 0; r.done = false; }
-    this.buildHighlight(); this.drawLabels(); this.hooks.history?.(0); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
+    this.buildHighlight(); this.drawLabels(); this.hooks.history?.(0, 0); this.hooks.progress?.(this.stats()); this.hooks.changed?.();
   }
 
   // ---------- stats & export ----------
@@ -310,7 +325,7 @@ export class Board {
     }
     return { pct: den ? num / den : 0, per, allDone: left === 0 && den > 0 };
   }
-  emit() { this.hooks.progress?.(this.stats()); this.hooks.history?.(this.hist.length); }
+  emit() { this.hooks.progress?.(this.stats()); this.hooks.history?.(this.hist.length, this.redoStack.length); }
   hasPaint() { return this.regions.some((r) => !r.hidden && r.col.some((v) => v)); }
   toBlob() { return new Promise((res) => this.els.paint.toBlob(res, 'image/png')); }
   exportCanvas(size = 1800) {
