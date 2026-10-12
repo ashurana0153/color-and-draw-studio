@@ -43,9 +43,9 @@ function buildGallery() {
     const sec = el('section', `cat cat-${cat.id}`);
     sec.innerHTML = `<div class="cat-head"><span class="cat-ico">${ICONS[cat.id] || ''}</span><div><h2>${cat.title}</h2><p>${cat.blurb}</p></div><span class="cat-count">${finished} of ${arts.length} colored</span></div>`;
     const grid = el('div', 'grid');
-    arts.forEach((a) => {
+    arts.forEach((a, idx) => {
       const m = meta[a.id] || {}, pct = Math.round((m.pct || 0) * 100);
-      const b = el('button', `card${m.done ? ' is-done' : ''}`); b.type = 'button';
+      const b = el('button', `card${m.done ? ' is-done' : ''}`); b.type = 'button'; b.style.setProperty('--i', idx);
       const c = el('canvas'); thumb(c, a);
       const status = m.done ? 'Done' : pct > 0 ? `${pct}%` : 'New';
       b.append(c);
@@ -92,7 +92,7 @@ function buildPalette(art) {
 function pick(n) {
   board.setColor(n); if (board.tool === 'erase') setTool('brush');
   { const p = current && current.palette.find((q) => q.n === n); if (p) $('toolbar').style.setProperty('--c', p.hex); }
-  document.querySelectorAll('.sw').forEach((s) => { const on = +s.dataset.n === n; s.classList.toggle('on', on); s.setAttribute('aria-checked', on); if (on) s.scrollIntoView({ block: 'nearest', inline: 'nearest' }); });
+  document.querySelectorAll('.sw').forEach((s) => { const on = +s.dataset.n === n; s.classList.toggle('on', on); s.setAttribute('aria-checked', on); if (on) s.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); });
 }
 function onProgress(st) {
   const pct = Math.round(st.pct * 100);
@@ -201,9 +201,20 @@ function applyZoom(z, ux, uy, vx, vy) {
 }
 function zoomAt(f, vx, vy) { const u = contentPoint(vx, vy); applyZoom(zoom * f, u.x, u.y, vx, vy); }
 const mid = () => { const w = viewport.clientWidth / 2; return [w, w]; };
-$('zIn').onclick = () => zoomAt(1.5, ...mid());
-$('zOut').onclick = () => zoomAt(1 / 1.5, ...mid());
-$('zFit').onclick = () => applyZoom(1, 0.5, 0.5, ...mid());
+let zoomRaf = 0;
+function tweenZoom(target, vx, vy, ux, uy) {            // eased zoom for the buttons and keys (wheel and pinch stay direct)
+  cancelAnimationFrame(zoomRaf);
+  const u = ux == null ? contentPoint(vx, vy) : { x: ux, y: uy }, z0 = zoom, z1 = clampZ(target), t0 = performance.now(), D = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220;
+  const step = (now) => {
+    const k = D ? Math.min(1, (now - t0) / D) : 1, e = 1 - Math.pow(1 - k, 3);
+    applyZoom(z0 + (z1 - z0) * e, u.x, u.y, vx, vy);
+    if (k < 1) zoomRaf = requestAnimationFrame(step);
+  };
+  zoomRaf = requestAnimationFrame(step);
+}
+$('zIn').onclick = () => tweenZoom(zoom * 1.5, ...mid());
+$('zOut').onclick = () => tweenZoom(zoom / 1.5, ...mid());
+$('zFit').onclick = () => tweenZoom(1, ...mid(), 0.5, 0.5);
 viewport.addEventListener('wheel', (e) => { e.preventDefault(); const r = vpRect(); zoomAt(Math.exp(-e.deltaY * 0.0016), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
 
 const syncPan = () => { const on = panTool || space; viewport.classList.toggle('panning', on); if (on) cursor.hidden = true; };
@@ -253,8 +264,8 @@ addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? board.redo() : board.undo(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); board.redo(); return; }
   if (e.key === ' ') { e.preventDefault(); if (!space) { space = true; syncPan(); } return; }
-  if (e.key === '+' || e.key === '=') { zoomAt(1.4, ...mid()); return; }
-  if (e.key === '-' || e.key === '_') { zoomAt(1 / 1.4, ...mid()); return; }
+  if (e.key === '+' || e.key === '=') { tweenZoom(zoom * 1.4, ...mid()); return; }
+  if (e.key === '-' || e.key === '_') { tweenZoom(zoom / 1.4, ...mid()); return; }
   if (/^[0-9]$/.test(k)) { const n = k === '0' ? 10 : +k; if (current.palette.some((p) => p.n === n)) pick(n); }
   else if (k === 'e') setTool(board.tool === 'erase' ? 'brush' : 'erase');
   else if (k === 'b') setTool('brush');
@@ -275,9 +286,10 @@ function route() {
   if (art) open(art); else { current = null; buildGallery(); show('gallery'); $('finale').hidden = true; }
 }
 const more = $('more'), moreBtn = $('moreBtn');
-const closeMore = () => { more.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); };
-moreBtn.onclick = (e) => { e.stopPropagation(); more.hidden = !more.hidden; moreBtn.setAttribute('aria-expanded', String(!more.hidden)); };
-document.addEventListener('pointerdown', (e) => { if (!more.hidden && !more.contains(e.target) && !moreBtn.contains(e.target)) closeMore(); });
+const isOpen = () => more.classList.contains('open');
+const closeMore = () => { more.classList.remove('open'); moreBtn.setAttribute('aria-expanded', 'false'); };
+moreBtn.onclick = (e) => { e.stopPropagation(); more.classList.toggle('open'); moreBtn.setAttribute('aria-expanded', String(isOpen())); };
+document.addEventListener('pointerdown', (e) => { if (isOpen() && !more.contains(e.target) && !moreBtn.contains(e.target)) closeMore(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
 $('back').onclick = async () => { clearTimeout(saveTimer); if (current) await persist(); go('#/'); };
 addEventListener('hashchange', route);
